@@ -1,72 +1,55 @@
 import streamlit as st
+from datetime import datetime, timedelta
+import time
 
 # 페이지 설정
-st.set_page_config(page_title="Streamlit 계산기", layout="centered")
+st.set_page_config(page_title="스마트 알람시계", layout="centered")
 
-# --- 세션 상태(Session State) 초기화 ---
-if "expression" not in st.session_state:
-    st.session_state.expression = ""  # 현재 입력 중인 수식
-if "result" not in st.session_state:
-    st.session_state.result = ""      # 계산 결과
-if "last_expression" not in st.session_state:
-    st.session_state.last_expression = "" # 결과가 나온 직전 수식
-if "history" not in st.session_state:
-    st.session_state.history = []     # 계산 기록 저장 리스트
-if "show_history" not in st.session_state:
-    st.session_state.show_history = False # 기록 창 표시 여부
+# --- 1. 세션 상태(Session State) 초기화 ---
+if "page" not in st.session_state:
+    st.session_state.page = "main"  # 'main' 또는 'add'
+if "alarms" not in st.session_state:
+    # 기본 샘플 알람 예시 데이터 구조
+    st.session_state.alarms = [
+        {
+            "id": 1,
+            "name": "출근 알람",
+            "date": datetime.now().date(),
+            "time": datetime.now().time(),
+            "sound": "기본 벨소리",
+            "vibrate": True,
+            "snooze": True,
+            "snooze_interval": 5,
+            "snooze_count": 3,
+            "active": True
+        }
+    ]
+if "alarm_id_counter" not in st.session_state:
+    st.session_state.alarm_id_counter = 2
 
-# --- 버튼 클릭 이벤트 함수 정의 ---
-def press_key(key):
-    if key == "C":
-        st.session_state.expression = ""
-        st.session_state.result = ""
-        st.session_state.last_expression = ""
-    elif key == "⌫":  # 하나씩 지우기
-        st.session_state.expression = st.session_state.expression[:-1]
-    elif key == "=":
-        try:
-            # 사용자가 보기 편하게 넣은 'x' 기호를 파이썬 연산자 '*'로 변경
-            expr_to_eval = st.session_state.expression.replace("x", "*")
-            
-            # 수식이 비어있지 않은 경우에만 계산
-            if expr_to_eval.strip():
-                # eval 함수를 사용해 문자열 수식 계산 (소수점 유지)
-                calc_result = eval(expr_to_eval)
-                
-                # 정수형태로 표현 가능하면 정수로, 아니면 소수점 그대로 표시
-                if isinstance(calc_result, float) and calc_result.is_integer():
-                    calc_result = int(calc_result)
-                
-                st.session_state.result = str(calc_result)
-                st.session_state.last_expression = st.session_state.expression
-                
-                # 계산 기록에 추가
-                record = f"{st.session_state.expression} = {st.session_state.result}"
-                if record not in st.session_state.history:
-                    st.session_state.history.append(record)
-        except Exception:
-            st.session_state.result = "Error"
-            st.session_state.last_expression = st.session_state.expression
-    else:
-        # 일반 숫자 및 연산자 입력
-        st.session_state.expression += str(key)
+# --- 2. 헬퍼 함수 (남은 시간 계산) ---
+def get_time_remaining_str(alarm_date, alarm_time):
+    """현재 시간으로부터 알람까지 남은 시간을 계산하여 문자열로 반환"""
+    now = datetime.now()
+    alarm_datetime = datetime.combine(alarm_date, alarm_time)
+    
+    if alarm_datetime <= now:
+        return "이미 지나간 알람입니다."
+    
+    diff = alarm_datetime - now
+    hours = diff.seconds // 3600
+    minutes = (diff.seconds % 3600) // 60
+    
+    days_str = f"{diff.days}일 " if diff.days > 0 else ""
+    hours_str = f"{hours}시간 " if hours > 0 or diff.days > 0 else ""
+    return f"{days_str}{hours_str}{minutes}분 뒤에 울립니다."
 
-def toggle_history():
-    st.session_state.show_history = not st.session_state.show_history
-
-# --- UI 레이아웃 구성 ---
-st.title("🧮 스마트 계산기")
-
-# 1. 계산 결과창 및 수식 표시창 (큰 글씨 및 작은 글씨 상단 배치)
-st.markdown("---")
-if st.session_state.result:
-    # '=' 버튼 클릭 시 작은 글씨로 직전 수식 표시, 큰 글씨로 결과 표시
-    st.caption(f"수식: {st.session_state.last_expression}")
-    st.markdown(f"## **{st.session_state.result}**")
-else:
-    # 평소에는 현재 입력 중인 수식을 큰 글씨로 표시
-    st.caption("입력창")
-    st.markdown(f"## **{st.session_state.expression if st.session_state.expression else '0'}**")
-st.markdown("---")
-
-# 2. 키
+# --- 3. 실시간 알람 체크 기능 (상단 고정) ---
+# 메인 화면이나 추가 화면 진입 시 현재 시간과 비교하여 켜져 있는 알람이 있으면 팝업을 띄웁니다.
+now_dt = datetime.now()
+for alarm in st.session_state.alarms:
+    if alarm["active"]:
+        alarm_dt = datetime.combine(alarm["date"], alarm["time"])
+        # 현재 시간과 분 단위까지 일치할 때 알람 발동 (초 단위 오차 고려)
+        if alarm_dt.date() == now_dt.date() and alarm_dt.hour == now_dt.hour and alarm_dt.minute == now_dt.minute:
+            st.toast
